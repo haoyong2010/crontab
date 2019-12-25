@@ -5,6 +5,7 @@ import (
 	"crontab/common"
 	"encoding/json"
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/mvcc/mvccpb"
 	"time"
 )
 
@@ -99,4 +100,55 @@ func (jobMgr *JobMgr) DeleteJob(name string) (oldJob *common.Job, err error) {
 		oldJob = &oldJobObj
 	}
 	return
+}
+func (jobMgr *JobMgr) ListJobs() (jobList []*common.Job, err error) {
+	var (
+		dirKey  string
+		getResp *clientv3.GetResponse
+		keyPair *mvccpb.KeyValue
+		job     *common.Job
+	)
+	//任务保存目录
+	dirKey = common.JOB_SAVE_DIR
+	//获取目录下所有任务信息
+	if getResp, err = jobMgr.kv.Get(context.TODO(), dirKey, clientv3.WithPrefix()); err != nil {
+		return
+	}
+	//初始化数组空间
+	jobList = make([]*common.Job, 0)
+	//len(jobList)==0
+	//遍历所有任务，进行反序列化
+	for _, keyPair = range getResp.Kvs {
+		job = &common.Job{}
+		if err = json.Unmarshal(keyPair.Value, job); err != nil {
+			err = nil
+			continue
+		}
+		jobList = append(jobList, job)
+	}
+	return
+}
+
+//杀死任务
+func (jobMgr *JobMgr) KillJob(name string) (err error) {
+	//向/cron/killer任务名
+	var (
+		killerKey      string
+		leaseGrantResp *clientv3.LeaseGrantResponse
+		leaseId        clientv3.LeaseID
+	)
+	//通知worker杀死对应任务
+	killerKey = common.JOB_KILL_DIR + name
+	//让worker监听到一次put操作,创建一个租约让其稍后自动过期
+	if leaseGrantResp, err = jobMgr.lease.Grant(context.TODO(), 1); err != nil {
+		return
+	}
+	//租约id
+	leaseId = leaseGrantResp.ID
+	//设置killer标记
+	if _, err = jobMgr.kv.Put(context.TODO(), killerKey, "", clientv3.WithLease(leaseId)); err != nil {
+		return
+	}
+	return
+
 }

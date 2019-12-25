@@ -19,7 +19,7 @@ func initArgs() {
 	//查看命令提示内容
 	//master -h
 	//						 参数名		     默认值				   提示
-	flag.StringVar(&confFile, "config", "./master.json", "指定master.json")
+	flag.StringVar(&confFile, "config", "/Users/haoyong/workspace/src/crontab/master/main/master.json", "指定master.json")
 	//解析命令
 	flag.Parse()
 
@@ -41,7 +41,10 @@ func main() {
 	if err = master.InitConfig(confFile); err != nil {
 		goto ERR
 	}
-
+	//日志管理器
+	if err = master.InitLogMgr(); err != nil {
+		goto ERR
+	}
 	//任务管理器
 	if err = master.InitJobMgr(); err != nil {
 		goto ERR
